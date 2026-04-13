@@ -2,10 +2,13 @@ package com.example.pomodoroapp
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Build
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.view.View
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -22,11 +25,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var storage: SessionStorage
     private lateinit var historyAdapter: HistoryAdapter
+    private val toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100)
 
     private var countDownTimer: CountDownTimer? = null
     private var isRunning = false
     private var isStudyMode = true
-    private var remainingMillis = STUDY_DURATION_MS
+    private var studyDurationMinutes = DEFAULT_STUDY_MINUTES
+    private var breakDurationMinutes = DEFAULT_BREAK_MINUTES
+    private var remainingMillis = studyDurationMinutes * 60 * 1000L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,6 +50,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         countDownTimer?.cancel()
+        toneGenerator.release()
         super.onDestroy()
     }
 
@@ -63,11 +70,13 @@ class MainActivity : AppCompatActivity() {
     private fun setupButtons() {
         binding.buttonStart.setOnClickListener {
             if (!isRunning) {
+                applyCustomDurations()
                 startTimer()
             }
         }
         binding.buttonPause.setOnClickListener { pauseTimer() }
         binding.buttonReset.setOnClickListener { resetTimer() }
+        binding.buttonSkip.setOnClickListener { skipCurrentPhase() }
     }
 
     private fun startTimer() {
@@ -82,11 +91,12 @@ class MainActivity : AppCompatActivity() {
             override fun onFinish() {
                 isRunning = false
                 if (isStudyMode) {
-                    storage.saveStudySession(STUDY_MINUTES)
+                    storage.saveStudySession(studyDurationMinutes)
                 }
                 showFinishNotification()
+                playReminderTone()
                 isStudyMode = !isStudyMode
-                remainingMillis = if (isStudyMode) STUDY_DURATION_MS else BREAK_DURATION_MS
+                remainingMillis = currentPhaseDurationMs()
                 updateTimerUi()
                 refreshStats()
             }
@@ -102,8 +112,22 @@ class MainActivity : AppCompatActivity() {
     private fun resetTimer() {
         countDownTimer?.cancel()
         isRunning = false
+        applyCustomDurations()
         isStudyMode = true
-        remainingMillis = STUDY_DURATION_MS
+        remainingMillis = currentPhaseDurationMs()
+        updateTimerUi()
+    }
+
+    private fun skipCurrentPhase() {
+        countDownTimer?.cancel()
+        isRunning = false
+        if (isStudyMode) {
+            Toast.makeText(this, "已跳过当前专注周期", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "已跳过当前休息周期", Toast.LENGTH_SHORT).show()
+        }
+        isStudyMode = !isStudyMode
+        remainingMillis = currentPhaseDurationMs()
         updateTimerUi()
     }
 
@@ -126,6 +150,8 @@ class MainActivity : AppCompatActivity() {
         val minutes = totalSeconds / 60
         val seconds = totalSeconds % 60
         binding.textTimer.text = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
+        binding.editStudyMinutes.setText(studyDurationMinutes.toString())
+        binding.editBreakMinutes.setText(breakDurationMinutes.toString())
         updateStatusText()
     }
 
@@ -147,6 +173,28 @@ class MainActivity : AppCompatActivity() {
             .notify((System.currentTimeMillis() % 10000).toInt(), notification)
     }
 
+    private fun playReminderTone() {
+        toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP2, 400)
+    }
+
+    private fun applyCustomDurations() {
+        val studyInput = binding.editStudyMinutes.text?.toString()?.trim().orEmpty()
+        val breakInput = binding.editBreakMinutes.text?.toString()?.trim().orEmpty()
+        val newStudy = studyInput.toIntOrNull()?.coerceIn(1, 180) ?: studyDurationMinutes
+        val newBreak = breakInput.toIntOrNull()?.coerceIn(1, 60) ?: breakDurationMinutes
+        val changed = newStudy != studyDurationMinutes || newBreak != breakDurationMinutes
+        studyDurationMinutes = newStudy
+        breakDurationMinutes = newBreak
+        if (!isRunning && changed) {
+            remainingMillis = currentPhaseDurationMs()
+        }
+    }
+
+    private fun currentPhaseDurationMs(): Long {
+        val minutes = if (isStudyMode) studyDurationMinutes else breakDurationMinutes
+        return minutes * 60 * 1000L
+    }
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -160,10 +208,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
-        private const val STUDY_MINUTES = 25
-        private const val BREAK_MINUTES = 5
-        private const val STUDY_DURATION_MS = STUDY_MINUTES * 60 * 1000L
-        private const val BREAK_DURATION_MS = BREAK_MINUTES * 60 * 1000L
+        private const val DEFAULT_STUDY_MINUTES = 25
+        private const val DEFAULT_BREAK_MINUTES = 5
         private const val CHANNEL_ID = "pomodoro_channel"
     }
 }
