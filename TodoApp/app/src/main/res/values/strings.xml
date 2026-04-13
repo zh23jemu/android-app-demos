@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">待办事项</string>
+    <string name="add_task">添加任务</string>
+    <string name="delete_task">删除任务</string>
+</resources>

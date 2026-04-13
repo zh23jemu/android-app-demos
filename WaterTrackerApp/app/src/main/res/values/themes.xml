@@ -1,0 +1,8 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.WaterTrackerApp" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#005D73</item>
+        <item name="colorPrimaryContainer">#A4EEFF</item>
+        <item name="colorSecondary">#49646B</item>
+        <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimary</item>
+    </style>
+</resources>

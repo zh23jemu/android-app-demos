@@ -1,0 +1,8 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.TodoApp" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#006C4C</item>
+        <item name="colorPrimaryContainer">#71F7C0</item>
+        <item name="colorSecondary">#4F6358</item>
+        <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimary</item>
+    </style>
+</resources>
