@@ -11,6 +11,7 @@ import java.util.Locale
 
 class TaskAdapter(
     private val onCheckedChanged: (Task, Boolean) -> Unit,
+    private val onEditClicked: (Task) -> Unit,
     private val onDeleteClicked: (Task) -> Unit
 ) : RecyclerView.Adapter<TaskAdapter.TaskViewHolder>() {
 
@@ -50,6 +51,9 @@ class TaskAdapter(
             }
             binding.buttonDelete.setOnClickListener {
                 onDeleteClicked(task)
+            }
+            binding.buttonEdit.setOnClickListener {
+                onEditClicked(task)
             }
         }
     }

@@ -9,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.todoapp.data.TaskFilter
+import com.example.todoapp.data.TaskCategoryFilter
 import com.example.todoapp.data.TaskRepository
 import com.example.todoapp.data.TodoDatabase
 import com.example.todoapp.databinding.ActivityMainBinding
@@ -24,6 +25,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var repository: TaskRepository
     private lateinit var taskAdapter: TaskAdapter
     private var currentFilter: TaskFilter = TaskFilter.ALL
+    private var currentCategoryFilter: TaskCategoryFilter = TaskCategoryFilter.ALL
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,7 +34,7 @@ class MainActivity : AppCompatActivity() {
 
         repository = TaskRepository(TodoDatabase.getInstance(this).taskDao())
         setupToolbar()
-        setupFilterSpinner()
+        setupFilterSpinners()
         setupRecyclerView()
         setupActions()
         loadTasks()
@@ -43,19 +45,33 @@ class MainActivity : AppCompatActivity() {
         supportActionBar?.title = getString(R.string.app_name)
     }
 
-    private fun setupFilterSpinner() {
-        val labels = listOf("全部任务", "未完成", "已完成")
+    private fun setupFilterSpinners() {
+        val statusLabels = listOf("全部任务", "未完成", "已完成")
         binding.spinnerFilter.adapter = ArrayAdapter(
             this,
             android.R.layout.simple_spinner_dropdown_item,
-            labels
+            statusLabels
         )
         binding.spinnerFilter.setSelection(0)
+
+        val categoryLabels = listOf("全部分类", "学习", "生活")
+        binding.spinnerCategoryFilter.adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_dropdown_item,
+            categoryLabels
+        )
+        binding.spinnerCategoryFilter.setSelection(0)
+
         binding.buttonApplyFilter.setOnClickListener {
             currentFilter = when (binding.spinnerFilter.selectedItemPosition) {
                 1 -> TaskFilter.ACTIVE
                 2 -> TaskFilter.COMPLETED
                 else -> TaskFilter.ALL
+            }
+            currentCategoryFilter = when (binding.spinnerCategoryFilter.selectedItemPosition) {
+                1 -> TaskCategoryFilter.STUDY
+                2 -> TaskCategoryFilter.LIFE
+                else -> TaskCategoryFilter.ALL
             }
             loadTasks()
         }
@@ -68,6 +84,9 @@ class MainActivity : AppCompatActivity() {
                     repository.updateTask(task.copy(isCompleted = checked))
                     loadTasksOnMain()
                 }
+            },
+            onEditClicked = { task ->
+                showTaskDialog(task)
             },
             onDeleteClicked = { task ->
                 lifecycleScope.launch(Dispatchers.IO) {
@@ -84,11 +103,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupActions() {
         binding.fabAddTask.setOnClickListener {
-            showAddTaskDialog()
+            showTaskDialog()
         }
     }
 
-    private fun showAddTaskDialog() {
+    private fun showTaskDialog(task: com.example.todoapp.data.Task? = null) {
         val dialogBinding = DialogAddTaskBinding.inflate(LayoutInflater.from(this))
         val categories = listOf("学习", "生活")
         dialogBinding.spinnerCategory.adapter = ArrayAdapter(
@@ -96,9 +115,15 @@ class MainActivity : AppCompatActivity() {
             android.R.layout.simple_spinner_dropdown_item,
             categories
         )
+        if (task != null) {
+            dialogBinding.editTitle.setText(task.title)
+            dialogBinding.editContent.setText(task.content)
+            val categoryIndex = categories.indexOf(task.category).coerceAtLeast(0)
+            dialogBinding.spinnerCategory.setSelection(categoryIndex)
+        }
 
         AlertDialog.Builder(this)
-            .setTitle("新增任务")
+            .setTitle(if (task == null) "新增任务" else "编辑任务")
             .setView(dialogBinding.root)
             .setNegativeButton("取消", null)
             .setPositiveButton("保存") { _, _ ->
@@ -110,7 +135,17 @@ class MainActivity : AppCompatActivity() {
                     return@setPositiveButton
                 }
                 lifecycleScope.launch(Dispatchers.IO) {
-                    repository.addTask(title, content, category)
+                    if (task == null) {
+                        repository.addTask(title, content, category)
+                    } else {
+                        repository.updateTask(
+                            task.copy(
+                                title = title,
+                                content = content,
+                                category = category
+                            )
+                        )
+                    }
                     loadTasksOnMain()
                 }
             }
@@ -119,19 +154,29 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadTasks() {
         lifecycleScope.launch(Dispatchers.IO) {
-            val tasks = repository.getTasks(currentFilter)
+            val tasks = repository.getTasks(currentFilter, currentCategoryFilter)
+            val summary = repository.getSummary()
             withContext(Dispatchers.Main) {
                 taskAdapter.submitList(tasks)
                 binding.textEmpty.visibility = if (tasks.isEmpty()) android.view.View.VISIBLE else android.view.View.GONE
+                updateSummary(summary)
             }
         }
     }
 
     private suspend fun loadTasksOnMain() {
-        val tasks = repository.getTasks(currentFilter)
+        val tasks = repository.getTasks(currentFilter, currentCategoryFilter)
+        val summary = repository.getSummary()
         withContext(Dispatchers.Main) {
             taskAdapter.submitList(tasks)
             binding.textEmpty.visibility = if (tasks.isEmpty()) android.view.View.VISIBLE else android.view.View.GONE
+            updateSummary(summary)
         }
+    }
+
+    private fun updateSummary(summary: com.example.todoapp.data.TaskSummary) {
+        binding.textTotalCount.text = "${summary.totalCount}"
+        binding.textCompletedCount.text = "${summary.completedCount}"
+        binding.textActiveCount.text = "${summary.activeCount}"
     }
 }
