@@ -24,4 +24,7 @@ interface WaterDao {
 
     @Query("SELECT COUNT(*) FROM water_records WHERE date = :date")
     suspend fun getTodayRecordCount(date: String): Int
+
+    @Query("SELECT * FROM water_records WHERE date = :date ORDER BY createdAt DESC")
+    suspend fun getTodayRecords(date: String): List<WaterRecord>
 }
